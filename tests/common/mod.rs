@@ -8,7 +8,6 @@ use std::path::Path;
 
 use suture::Patch;
 use suture::metadata::HashAlgorithm;
-use suture::metadata::SourceDigest;
 use suture::metadata::SourceMetadata;
 
 pub fn corpus() -> Vec<u8> {
@@ -25,20 +24,17 @@ pub fn mixed_patch() -> Patch {
 }
 
 pub fn metadata_with_crc32(source: &[u8]) -> SourceMetadata {
-    let digest = HashAlgorithm::Crc32.compute(source);
-    SourceMetadata::new(source.len() as u64).with_digest(SourceDigest::new(HashAlgorithm::Crc32, digest))
+    SourceMetadata::new(source.len() as u64).with_digest(HashAlgorithm::Crc32.digest(source))
 }
 
 #[cfg(feature = "blake3")]
 pub fn metadata_with_blake3(source: &[u8]) -> SourceMetadata {
-    let digest = HashAlgorithm::Blake3.compute(source);
-    SourceMetadata::new(source.len() as u64).with_digest(SourceDigest::new(HashAlgorithm::Blake3, digest))
+    SourceMetadata::new(source.len() as u64).with_digest(HashAlgorithm::Blake3.digest(source))
 }
 
 #[cfg(feature = "sha2")]
 pub fn metadata_with_sha256(source: &[u8]) -> SourceMetadata {
-    let digest = HashAlgorithm::Sha256.compute(source);
-    SourceMetadata::new(source.len() as u64).with_digest(SourceDigest::new(HashAlgorithm::Sha256, digest))
+    SourceMetadata::new(source.len() as u64).with_digest(HashAlgorithm::Sha256.digest(source))
 }
 
 /// Overwrite `path` with `bytes`. Sleeps 10ms first so the resulting

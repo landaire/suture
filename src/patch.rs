@@ -15,7 +15,10 @@ use crate::target::PatchTarget;
 /// is a pure delete, `old_len == new_bytes.len()` is an in-place write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PatchOp {
     pub offset: u64,
     pub old_len: u64,
@@ -25,19 +28,35 @@ pub struct PatchOp {
 impl PatchOp {
     pub fn write(offset: u64, bytes: impl Into<Vec<u8>>) -> Self {
         let bytes = bytes.into();
-        Self { offset, old_len: bytes.len() as u64, new_bytes: bytes }
+        Self {
+            offset,
+            old_len: bytes.len() as u64,
+            new_bytes: bytes,
+        }
     }
 
     pub fn insert(offset: u64, bytes: impl Into<Vec<u8>>) -> Self {
-        Self { offset, old_len: 0, new_bytes: bytes.into() }
+        Self {
+            offset,
+            old_len: 0,
+            new_bytes: bytes.into(),
+        }
     }
 
     pub fn delete(offset: u64, len: u64) -> Self {
-        Self { offset, old_len: len, new_bytes: Vec::new() }
+        Self {
+            offset,
+            old_len: len,
+            new_bytes: Vec::new(),
+        }
     }
 
     pub fn splice(offset: u64, old_len: u64, new_bytes: impl Into<Vec<u8>>) -> Self {
-        Self { offset, old_len, new_bytes: new_bytes.into() }
+        Self {
+            offset,
+            old_len,
+            new_bytes: new_bytes.into(),
+        }
     }
 
     fn source_end(&self) -> u64 {
@@ -49,7 +68,10 @@ impl PatchOp {
 /// [`SourceMetadata`] for verification.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Patch {
     ops: Vec<PatchOp>,
     metadata: Option<SourceMetadata>,
@@ -61,7 +83,10 @@ impl Patch {
     }
 
     pub fn with_metadata(metadata: SourceMetadata) -> Self {
-        Self { ops: Vec::new(), metadata: Some(metadata) }
+        Self {
+            ops: Vec::new(),
+            metadata: Some(metadata),
+        }
     }
 
     pub fn metadata(&self) -> Option<&SourceMetadata> {
@@ -107,7 +132,12 @@ impl Patch {
         self.ops.push(op);
     }
 
-    pub fn splice(&mut self, offset: u64, old_len: u64, new_bytes: impl Into<Vec<u8>>) -> Result<(), BuildError> {
+    pub fn splice(
+        &mut self,
+        offset: u64,
+        old_len: u64,
+        new_bytes: impl Into<Vec<u8>>,
+    ) -> Result<(), BuildError> {
         self.insert_op(PatchOp::splice(offset, old_len, new_bytes))
     }
 
@@ -125,7 +155,9 @@ impl Patch {
 
     fn insert_op(&mut self, op: PatchOp) -> Result<(), BuildError> {
         let new_end = op.source_end();
-        let pos = self.ops.partition_point(|existing| existing.offset < op.offset);
+        let pos = self
+            .ops
+            .partition_point(|existing| existing.offset < op.offset);
         if let Some(prev) = pos.checked_sub(1).and_then(|i| self.ops.get(i))
             && prev.source_end() > op.offset
         {
@@ -169,7 +201,8 @@ impl Patch {
     /// documents the caller's obligation to have verified (1) and
     /// (2) out of band.
     pub unsafe fn apply_unchecked(&self, source: &[u8]) -> Vec<u8> {
-        self.apply_inner(source).expect("apply_unchecked: invariants violated by caller")
+        self.apply_inner(source)
+            .expect("apply_unchecked: invariants violated by caller")
     }
 
     fn apply_inner(&self, source: &[u8]) -> Result<Vec<u8>, ApplyError> {
@@ -179,7 +212,10 @@ impl Patch {
         let mut cursor: u64 = 0;
         for op in &self.ops {
             if op.offset < cursor {
-                return Err(ApplyError::OutOfOrder { offset: op.offset, cursor });
+                return Err(ApplyError::OutOfOrder {
+                    offset: op.offset,
+                    cursor,
+                });
             }
             if op.source_end() > source_len {
                 return Err(ApplyError::OutOfBounds {
@@ -208,12 +244,18 @@ impl Patch {
     /// the trait. Verify manually via
     /// [`SourceMetadata::verify`](crate::metadata::SourceMetadata::verify)
     /// if required.
-    pub fn apply_to<T: PatchTarget + ?Sized>(&self, target: &mut T) -> Result<(), ApplyToError<T::Error>> {
+    pub fn apply_to<T: PatchTarget + ?Sized>(
+        &self,
+        target: &mut T,
+    ) -> Result<(), ApplyToError<T::Error>> {
         let mut cursor: u64 = 0;
         let mut delta: i64 = 0;
         for op in &self.ops {
             if op.offset < cursor {
-                return Err(ApplyToError::OutOfOrder { offset: op.offset, cursor });
+                return Err(ApplyToError::OutOfOrder {
+                    offset: op.offset,
+                    cursor,
+                });
             }
             let target_offset = (op.offset as i64 + delta) as u64;
             target
@@ -235,7 +277,10 @@ impl Patch {
         let mut cursor: u64 = 0;
         for op in &self.ops {
             if op.offset < cursor {
-                return Err(ApplyError::OutOfOrder { offset: op.offset, cursor });
+                return Err(ApplyError::OutOfOrder {
+                    offset: op.offset,
+                    cursor,
+                });
             }
             if op.source_end() > source_len {
                 return Err(ApplyError::OutOfBounds {
@@ -244,12 +289,14 @@ impl Patch {
                     source_len,
                 });
             }
-            sink.write_all(&source[cursor as usize..op.offset as usize]).map_err(ApplyError::Io)?;
+            sink.write_all(&source[cursor as usize..op.offset as usize])
+                .map_err(ApplyError::Io)?;
             sink.write_all(&op.new_bytes).map_err(ApplyError::Io)?;
             cursor = op.source_end();
         }
         if cursor < source_len {
-            sink.write_all(&source[cursor as usize..]).map_err(ApplyError::Io)?;
+            sink.write_all(&source[cursor as usize..])
+                .map_err(ApplyError::Io)?;
         }
         Ok(())
     }
@@ -258,13 +305,21 @@ impl Patch {
 #[derive(Debug)]
 pub enum BuildError {
     /// A new splice overlaps an op already in the patch.
-    Overlap { offset: u64, existing_offset: u64, existing_old_len: u64 },
+    Overlap {
+        offset: u64,
+        existing_offset: u64,
+        existing_old_len: u64,
+    },
 }
 
 impl fmt::Display for BuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BuildError::Overlap { offset, existing_offset, existing_old_len } => write!(
+            BuildError::Overlap {
+                offset,
+                existing_offset,
+                existing_old_len,
+            } => write!(
                 f,
                 "splice at {offset} overlaps existing op at [{existing_offset}, {})",
                 existing_offset + existing_old_len
@@ -278,8 +333,15 @@ impl core::error::Error for BuildError {}
 #[derive(Debug)]
 pub enum ApplyError {
     Verify(VerifyError),
-    OutOfOrder { offset: u64, cursor: u64 },
-    OutOfBounds { offset: u64, old_len: u64, source_len: u64 },
+    OutOfOrder {
+        offset: u64,
+        cursor: u64,
+    },
+    OutOfBounds {
+        offset: u64,
+        old_len: u64,
+        source_len: u64,
+    },
     Io(io::Error),
 }
 
@@ -288,9 +350,16 @@ impl fmt::Display for ApplyError {
         match self {
             ApplyError::Verify(e) => write!(f, "source verification failed: {e}"),
             ApplyError::OutOfOrder { offset, cursor } => {
-                write!(f, "splice at {offset} would re-cross cursor {cursor}; ops must be sorted by offset")
+                write!(
+                    f,
+                    "splice at {offset} would re-cross cursor {cursor}; ops must be sorted by offset"
+                )
             }
-            ApplyError::OutOfBounds { offset, old_len, source_len } => {
+            ApplyError::OutOfBounds {
+                offset,
+                old_len,
+                source_len,
+            } => {
                 write!(
                     f,
                     "splice [{offset}, {}) extends past source length {source_len}",
@@ -316,7 +385,10 @@ impl core::error::Error for ApplyError {
 #[derive(Debug)]
 pub enum ApplyToError<E> {
     /// Only reachable for patches built with [`Patch::push_op`].
-    OutOfOrder { offset: u64, cursor: u64 },
+    OutOfOrder {
+        offset: u64,
+        cursor: u64,
+    },
     Sink(E),
 }
 
@@ -324,7 +396,10 @@ impl<E: fmt::Display> fmt::Display for ApplyToError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ApplyToError::OutOfOrder { offset, cursor } => {
-                write!(f, "op at {offset} would re-cross cursor {cursor}; ops must be sorted by offset")
+                write!(
+                    f,
+                    "op at {offset} would re-cross cursor {cursor}; ops must be sorted by offset"
+                )
             }
             ApplyToError::Sink(e) => write!(f, "target error: {e}"),
         }
@@ -348,7 +423,10 @@ mod tests {
     fn write_replaces_in_place() {
         let mut p = Patch::new();
         p.write(2, vec![0xAA, 0xBB]).unwrap();
-        assert_eq!(p.apply(&[0u8; 8]).unwrap(), vec![0, 0, 0xAA, 0xBB, 0, 0, 0, 0]);
+        assert_eq!(
+            p.apply(&[0u8; 8]).unwrap(),
+            vec![0, 0, 0xAA, 0xBB, 0, 0, 0, 0]
+        );
     }
 
     #[test]
@@ -390,7 +468,10 @@ mod tests {
     fn overlap_is_rejected() {
         let mut p = Patch::new();
         p.write(2, vec![0xAA, 0xBB]).unwrap();
-        assert!(matches!(p.write(3, vec![0xCC]), Err(BuildError::Overlap { .. })));
+        assert!(matches!(
+            p.write(3, vec![0xCC]),
+            Err(BuildError::Overlap { .. })
+        ));
     }
 
     #[test]

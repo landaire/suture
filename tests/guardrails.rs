@@ -21,7 +21,13 @@ fn length_only_metadata_catches_truncated_buffer() {
 
     let truncated = &source[..source.len() - 4];
     let err = p.apply(truncated).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::LengthMismatch { expected: 32, actual: 28 })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::LengthMismatch {
+            expected: 32,
+            actual: 28
+        })
+    ));
 }
 
 #[test]
@@ -33,7 +39,13 @@ fn length_only_metadata_catches_extended_buffer() {
     let mut extended = source.clone();
     extended.extend_from_slice(b"tail");
     let err = p.apply(&extended).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::LengthMismatch { expected: 32, actual: 36 })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::LengthMismatch {
+            expected: 32,
+            actual: 36
+        })
+    ));
 }
 
 #[test]
@@ -56,7 +68,10 @@ fn crc32_digest_catches_in_place_flip() {
 
     source[10] ^= 0x01;
     let err = p.apply(&source).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::DigestMismatch { .. })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::DigestMismatch { .. })
+    ));
 }
 
 #[cfg(feature = "blake3")]
@@ -69,7 +84,10 @@ fn blake3_digest_catches_in_place_flip() {
 
     source[7] ^= 0x40;
     let err = p.apply(&source).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::DigestMismatch { .. })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::DigestMismatch { .. })
+    ));
 }
 
 #[cfg(feature = "sha2")]
@@ -82,7 +100,10 @@ fn sha256_digest_catches_in_place_flip() {
 
     source[7] ^= 0x40;
     let err = p.apply(&source).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::DigestMismatch { .. })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::DigestMismatch { .. })
+    ));
 }
 
 #[test]
@@ -117,7 +138,6 @@ fn file_backed_source_is_caught_after_rewrite() {
     use std::fs;
     use suture::metadata::FileMetadata;
     use suture::metadata::HashAlgorithm;
-    use suture::metadata::SourceDigest;
 
     let tmp = tempfile::NamedTempFile::new().expect("tempfile");
     overwrite_file(tmp.path(), &corpus());
@@ -125,7 +145,7 @@ fn file_backed_source_is_caught_after_rewrite() {
     let original = fs::read(tmp.path()).unwrap();
     let original_stat = FileMetadata::from_file(&fs::File::open(tmp.path()).unwrap()).unwrap();
     let meta = SourceMetadata::new(original.len() as u64)
-        .with_digest(SourceDigest::new(HashAlgorithm::Crc32, HashAlgorithm::Crc32.compute(&original)))
+        .with_digest(HashAlgorithm::Crc32.digest(&original))
         .with_file(original_stat);
     let mut p = Patch::with_metadata(meta.clone());
     p.write(0, vec![0xAA]).unwrap();
@@ -141,7 +161,10 @@ fn file_backed_source_is_caught_after_rewrite() {
     assert_ne!(original_stat, new_stat);
 
     let err = p.apply(&reread).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::DigestMismatch { .. })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::DigestMismatch { .. })
+    ));
 }
 
 #[test]
@@ -149,7 +172,14 @@ fn overlap_between_two_writes_is_rejected_at_build_time() {
     let mut p = Patch::new();
     p.write(4, vec![0xAA, 0xBB, 0xCC]).unwrap();
     let err = p.write(6, vec![0xDD]).unwrap_err();
-    assert!(matches!(err, BuildError::Overlap { offset: 6, existing_offset: 4, existing_old_len: 3 }));
+    assert!(matches!(
+        err,
+        BuildError::Overlap {
+            offset: 6,
+            existing_offset: 4,
+            existing_old_len: 3
+        }
+    ));
 }
 
 #[test]
@@ -179,7 +209,14 @@ fn out_of_bounds_splice_errors_at_apply_time() {
     let mut p = Patch::new();
     p.write(30, vec![0xFF, 0xFF, 0xFF, 0xFF]).unwrap();
     let err = p.apply(&[0u8; 16]).unwrap_err();
-    assert!(matches!(err, ApplyError::OutOfBounds { offset: 30, old_len: 4, source_len: 16 }));
+    assert!(matches!(
+        err,
+        ApplyError::OutOfBounds {
+            offset: 30,
+            old_len: 4,
+            source_len: 16
+        }
+    ));
 }
 
 #[test]
@@ -188,7 +225,13 @@ fn out_of_order_ops_via_push_op_are_rejected_at_apply_time() {
     p.push_op(PatchOp::write(10, vec![0x01]));
     p.push_op(PatchOp::write(5, vec![0x02]));
     let err = p.apply(&corpus()).unwrap_err();
-    assert!(matches!(err, ApplyError::OutOfOrder { offset: 5, cursor: 11 }));
+    assert!(matches!(
+        err,
+        ApplyError::OutOfOrder {
+            offset: 5,
+            cursor: 11
+        }
+    ));
 }
 
 #[test]
@@ -202,7 +245,10 @@ fn stream_to_enforces_same_guardrails_as_apply() {
 
     let mut sink = Vec::new();
     let err = p.stream_to(&tampered, &mut sink).unwrap_err();
-    assert!(matches!(err, ApplyError::Verify(VerifyError::DigestMismatch { .. })));
+    assert!(matches!(
+        err,
+        ApplyError::Verify(VerifyError::DigestMismatch { .. })
+    ));
     assert!(sink.is_empty());
 }
 

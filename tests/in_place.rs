@@ -30,7 +30,11 @@ fn growing_patch() -> Patch {
 }
 
 fn open_rw(path: &std::path::Path) -> std::fs::File {
-    OpenOptions::new().read(true).write(true).open(path).expect("reopen rw")
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .expect("reopen rw")
 }
 
 #[test]
@@ -50,7 +54,11 @@ fn apply_to_mut_slice_rejects_length_changing_op() {
     let err = p.apply_to(buf.as_mut_slice()).unwrap_err();
     assert!(matches!(
         err,
-        ApplyToError::Sink(BufferError::LengthChangeUnsupported { offset: 4, old_len: 0, new_len: 2 })
+        ApplyToError::Sink(BufferError::LengthChangeUnsupported {
+            offset: 4,
+            old_len: 0,
+            new_len: 2
+        })
     ));
     assert_eq!(buf, corpus());
 }
@@ -64,7 +72,11 @@ fn apply_to_mut_slice_reports_out_of_bounds_write() {
     let err = p.apply_to(buf.as_mut_slice()).unwrap_err();
     assert!(matches!(
         err,
-        ApplyToError::Sink(BufferError::OutOfBounds { offset: 6, old_len: 4, buffer_len: 8 })
+        ApplyToError::Sink(BufferError::OutOfBounds {
+            offset: 6,
+            old_len: 4,
+            buffer_len: 8
+        })
     ));
 }
 
@@ -90,7 +102,11 @@ fn apply_to_vec_reports_out_of_bounds_splice() {
     let err = p.apply_to(&mut target).unwrap_err();
     assert!(matches!(
         err,
-        ApplyToError::Sink(BufferError::OutOfBounds { offset: 10, old_len: 2, .. })
+        ApplyToError::Sink(BufferError::OutOfBounds {
+            offset: 10,
+            old_len: 2,
+            ..
+        })
     ));
     // apply_to is not transactional: the earlier write already landed.
     assert_eq!(target[4], 0xAA);
@@ -104,7 +120,13 @@ fn apply_to_vec_with_out_of_order_ops_errors_mid_apply() {
     p.push_op(PatchOp::write(5, vec![0x02]));
 
     let err = p.apply_to(&mut target).unwrap_err();
-    assert!(matches!(err, ApplyToError::OutOfOrder { offset: 5, cursor: 11 }));
+    assert!(matches!(
+        err,
+        ApplyToError::OutOfOrder {
+            offset: 5,
+            cursor: 11
+        }
+    ));
     // Not transactional: op 1 landed before op 2 tripped the check.
     assert_eq!(target[10], 0x01);
 }
@@ -215,6 +237,10 @@ fn apply_to_file_rejects_splice_past_end() {
     let err = p.apply_to(&mut f).unwrap_err();
     assert!(matches!(
         err,
-        ApplyToError::Sink(FileTargetError::OutOfBounds { offset: 4, old_len: 8, file_len: 5 })
+        ApplyToError::Sink(FileTargetError::OutOfBounds {
+            offset: 4,
+            old_len: 8,
+            file_len: 5
+        })
     ));
 }

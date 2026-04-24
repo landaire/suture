@@ -27,7 +27,11 @@ fn hexdump(bytes: &[u8]) -> String {
         }
         out.push_str("  |");
         for b in chunk {
-            out.push(if (0x20..0x7f).contains(b) { *b as char } else { '.' });
+            out.push(if (0x20..0x7f).contains(b) {
+                *b as char
+            } else {
+                '.'
+            });
         }
         out.push_str("|\n");
     }

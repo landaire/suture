@@ -26,14 +26,14 @@ that have already verified out-of-band.
 
 ## Cargo features
 
-| feature | adds |
-| --- | --- |
+| feature  | adds                                                                   |
+| -------- | ---------------------------------------------------------------------- |
 | `serde`  | `Serialize` / `Deserialize` derives on `Patch`, `SourceMetadata`, etc. |
-| `rkyv`   | `Archive` / `Serialize` / `Deserialize` derives. |
-| `blake3` | `HashAlgorithm::Blake3` and BLAKE3-backed digest computation. |
-| `sha2`   | `HashAlgorithm::Sha256` and SHA-256-backed digest computation. |
+| `rkyv`   | `Archive` / `Serialize` / `Deserialize` derives.                       |
+| `blake3` | `HashAlgorithm::Blake3` and BLAKE3-backed digest computation.          |
+| `sha2`   | `HashAlgorithm::Sha256` and SHA-256-backed digest computation.         |
 
-CRC-32 is always available -- no feature gate required.
+CRC-32 is always available.
 
 ## License
 

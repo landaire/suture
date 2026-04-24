@@ -1,10 +1,5 @@
-//! Insta snapshot tests pinning the observable shape of patch
-//! output, error messages, and serialised patches.
-//!
-//! These tests don't assert internal structure -- they assert that
-//! the *outside* of the library stays stable. If a snapshot breaks,
-//! either the change is intentional (update the snapshot) or it's a
-//! regression that the unit tests didn't catch.
+//! Snapshot tests pinning applied output, error Display form, and
+//! the serde schema.
 
 mod common;
 
@@ -12,15 +7,14 @@ use std::fmt::Write as _;
 
 use suture::Patch;
 use suture::PatchOp;
-use suture::SourceMetadata;
+use suture::metadata::SourceMetadata;
 
 use crate::common::corpus;
 use crate::common::metadata_with_crc32;
 use crate::common::mixed_patch;
 
-/// Render bytes as a 16-column hexdump with an ASCII gutter. Gives
-/// snapshots that are legible on review and diff cleanly when a
-/// single byte changes.
+/// 16-column hexdump with an ASCII gutter, for diff-friendly
+/// snapshots.
 fn hexdump(bytes: &[u8]) -> String {
     let mut out = String::new();
     for (row, chunk) in bytes.chunks(16).enumerate() {
@@ -39,8 +33,6 @@ fn hexdump(bytes: &[u8]) -> String {
     }
     out
 }
-
-// --- applied-output snapshots -------------------------------------
 
 #[test]
 fn snapshot_in_place_write_on_corpus() {
@@ -89,12 +81,6 @@ fn snapshot_extend_via_end_insert() {
     insta::assert_snapshot!(hexdump(&p.apply(&corpus()).unwrap()));
 }
 
-// --- error-message snapshots --------------------------------------
-//
-// These pin the Display form of every error variant so downstream
-// callers can rely on recognisable wording (log scrapers, e2e tests,
-// etc.) and any change here is deliberate.
-
 #[test]
 fn snapshot_display_length_mismatch_error() {
     let mut p = Patch::with_metadata(SourceMetadata::new(32));
@@ -139,14 +125,11 @@ fn snapshot_display_overlap_build_error() {
     insta::assert_snapshot!(err.to_string());
 }
 
-// --- serialised-patch snapshots ----------------------------------
-
 #[cfg(feature = "serde")]
 #[test]
 fn snapshot_serde_json_shape_of_mixed_patch_with_metadata() {
-    // Pins the on-the-wire schema for serde consumers. A change here
-    // means existing serialised patches on disk may not round-trip,
-    // so it should only happen with a version bump.
+    // Pins the wire schema. A diff here means existing serialised
+    // patches on disk may not round-trip cleanly.
     let source = corpus();
     let mut p = Patch::with_metadata(metadata_with_crc32(&source));
     p.write(2, vec![0xAA, 0xBB]).unwrap();
@@ -160,9 +143,6 @@ fn snapshot_serde_json_shape_of_mixed_patch_with_metadata() {
 #[cfg(feature = "serde")]
 #[test]
 fn snapshot_serde_json_round_trip_fidelity() {
-    // A round-trip through JSON and back must yield a byte-identical
-    // application. Snapshot the applied output so regressions in the
-    // serialised shape (e.g. dropping a field) are loud.
     let source = corpus();
     let p = mixed_patch();
     let json = serde_json::to_string(&p).unwrap();

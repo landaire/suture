@@ -1,15 +1,13 @@
-//! Source-material metadata used to verify that a patch is being
-//! applied to the buffer it was generated against.
+//! Source-buffer metadata used to verify a patch is being applied
+//! to the buffer it was built against.
 
 use core::fmt;
 use std::io;
 
-/// Description of the source bytes a [`Patch`](crate::Patch) was
-/// generated against. None of the fields are required individually:
-/// a metadata block with only `len` is still useful for catching the
-/// "wrong file entirely" case; add `digest` for tamper-detection and
-/// `file` to short-circuit verification when the on-disk timestamp
-/// proves the file is untouched.
+/// Description of the source a [`Patch`](crate::Patch) was built
+/// against. `len` alone catches "wrong buffer entirely"; add a
+/// [`SourceDigest`] for tamper detection and [`FileMetadata`] for
+/// an mtime fast path.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
@@ -34,10 +32,8 @@ impl SourceMetadata {
         self
     }
 
-    /// Verify that `source` matches the recorded length and digest.
-    /// `file` is intentionally not consulted -- it's an opportunistic
-    /// fast path callers can check separately to skip a full content
-    /// hash.
+    /// Verify `source` against `len` and `digest`. `file` is not
+    /// consulted -- it's a separate, caller-driven fast path.
     pub fn verify(&self, source: &[u8]) -> Result<(), VerifyError> {
         if source.len() as u64 != self.len {
             return Err(VerifyError::LengthMismatch { expected: self.len, actual: source.len() as u64 });
@@ -56,9 +52,8 @@ impl SourceMetadata {
     }
 }
 
-/// `(algorithm, digest)` pair. Stored separately from
-/// [`SourceMetadata`] so callers can build digests on a background
-/// thread and attach them once ready.
+/// `(algorithm, digest)` pair. Split from [`SourceMetadata`] so
+/// callers can compute the digest out of band and attach it later.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
@@ -73,39 +68,29 @@ impl SourceDigest {
     }
 }
 
-/// Filesystem stat snapshot. Cheap-to-check optimisation for
-/// "did the file change?" without re-reading the whole thing.
-/// Populated by callers from `std::fs::Metadata` when the source is
-/// file-backed.
+/// Filesystem stat snapshot for a mtime-based "did this file
+/// change?" check without re-reading contents. Populated by
+/// callers from [`std::fs::Metadata`] on file-backed sources.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct FileMetadata {
     pub size: u64,
-    /// Modification time as `(seconds_since_unix_epoch, nanos)`.
-    /// Stored split so the type stays platform- and timezone-agnostic.
+    /// Unix mtime split into `(seconds, nanos)`.
     pub mtime_seconds: i64,
     pub mtime_nanos: u32,
 }
 
 impl FileMetadata {
-    /// Snapshot an open file's size and modification time.
-    ///
-    /// Convenience wrapper around [`FileMetadata::from_metadata`] for
-    /// the common "I already have the file open" case.
-    pub fn from_file(file: &std::fs::File) -> io::Result<Self> {
+    pub fn from_file(file: &std::fs::File) -> Result<Self, FileMetadataError> {
         Self::from_metadata(&file.metadata()?)
     }
 
-    /// Snapshot a [`std::fs::Metadata`] into the library's platform-
-    /// agnostic form. Errors if the filesystem didn't record an
-    /// mtime (rare, typically only on exotic filesystems) or if the
-    /// mtime predates the Unix epoch.
-    pub fn from_metadata(meta: &std::fs::Metadata) -> io::Result<Self> {
+    pub fn from_metadata(meta: &std::fs::Metadata) -> Result<Self, FileMetadataError> {
         let mtime = meta.modified()?;
-        let duration = mtime.duration_since(std::time::UNIX_EPOCH).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, format!("file mtime predates Unix epoch: {e}"))
-        })?;
+        let duration = mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| FileMetadataError::MtimeBeforeEpoch { before_epoch_by: e.duration() })?;
         Ok(Self {
             size: meta.len(),
             mtime_seconds: duration.as_secs() as i64,
@@ -114,15 +99,48 @@ impl FileMetadata {
     }
 }
 
+#[derive(Debug)]
+pub enum FileMetadataError {
+    /// The filesystem didn't record an mtime, or metadata lookup
+    /// failed.
+    Io(io::Error),
+    /// The recorded mtime is before [`std::time::UNIX_EPOCH`].
+    MtimeBeforeEpoch { before_epoch_by: std::time::Duration },
+}
+
+impl fmt::Display for FileMetadataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FileMetadataError::Io(e) => write!(f, "file metadata read failed: {e}"),
+            FileMetadataError::MtimeBeforeEpoch { before_epoch_by } => {
+                write!(f, "file mtime is {before_epoch_by:?} before Unix epoch")
+            }
+        }
+    }
+}
+
+impl core::error::Error for FileMetadataError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            FileMetadataError::Io(e) => Some(e),
+            FileMetadataError::MtimeBeforeEpoch { .. } => None,
+        }
+    }
+}
+
+impl From<io::Error> for FileMetadataError {
+    fn from(e: io::Error) -> Self {
+        FileMetadataError::Io(e)
+    }
+}
+
 /// Hash function tag. CRC-32 is always available; cryptographic
-/// hashes are gated on opt-in features. The bar here is "did the
-/// source change", not collision resistance, so CRC-32 is a fine
-/// default when the patch only needs cheap tamper-detection.
+/// hashes require an opt-in feature.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum HashAlgorithm {
-    /// IEEE 802.3 CRC-32. 4-byte digest. Built in, no feature gate.
+    /// IEEE 802.3 CRC-32, 4-byte digest.
     Crc32,
     #[cfg(feature = "blake3")]
     Blake3,
@@ -131,7 +149,6 @@ pub enum HashAlgorithm {
 }
 
 impl HashAlgorithm {
-    /// Compute the digest of `bytes`.
     pub fn compute(self, bytes: &[u8]) -> Vec<u8> {
         match self {
             HashAlgorithm::Crc32 => crc32_ieee(bytes).to_be_bytes().to_vec(),
@@ -245,7 +262,6 @@ mod tests {
 
         let fm = FileMetadata::from_file(tmp.as_file()).unwrap();
         assert_eq!(fm.size, b"hello suture".len() as u64);
-        // mtime is expected to be post-epoch on any sane host.
         assert!(fm.mtime_seconds > 0);
         assert!(fm.mtime_nanos < 1_000_000_000);
     }

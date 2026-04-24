@@ -11,7 +11,6 @@ use suture::metadata::VerifyError;
 
 use crate::common::corpus;
 use crate::common::metadata_with_crc32;
-use crate::common::mixed_patch;
 
 #[test]
 fn length_only_metadata_catches_truncated_buffer() {
@@ -168,18 +167,17 @@ fn file_backed_source_is_caught_after_rewrite() {
 }
 
 #[test]
-fn overlap_between_two_writes_is_rejected_at_build_time() {
+fn overlap_between_two_writes_is_coalesced() {
+    // `Patch::write` coalesces overlapping / adjacent length-
+    // preserving writes into a single op so interactive editors
+    // (e.g. a hex editor typing successive bytes) don't bounce off
+    // their own earlier edits. Both writes land in the same op,
+    // with the second painting over the first's tail byte.
     let mut p = Patch::new();
     p.write(4, vec![0xAA, 0xBB, 0xCC]).unwrap();
-    let err = p.write(6, vec![0xDD]).unwrap_err();
-    assert!(matches!(
-        err,
-        BuildError::Overlap {
-            offset: 6,
-            existing_offset: 4,
-            existing_old_len: 3
-        }
-    ));
+    p.write(6, vec![0xDD]).unwrap();
+    assert_eq!(p.ops().len(), 1);
+    assert_eq!(p.apply(&[0u8; 8]).unwrap(), vec![0, 0, 0, 0, 0xAA, 0xBB, 0xDD, 0]);
 }
 
 #[test]

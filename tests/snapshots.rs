@@ -123,8 +123,11 @@ fn snapshot_display_out_of_order_error() {
 
 #[test]
 fn snapshot_display_overlap_build_error() {
+    // Writes coalesce with neighbours, but mixing a write against
+    // a non-length-preserving op (here: delete) still produces an
+    // Overlap error, whose Display formatting we pin.
     let mut p = Patch::new();
-    p.write(4, vec![0xAA, 0xBB, 0xCC]).unwrap();
+    p.delete(4, 3).unwrap();
     let err = p.write(5, vec![0xDD]).unwrap_err();
     insta::assert_snapshot!(err.to_string());
 }

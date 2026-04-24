@@ -141,8 +141,73 @@ impl Patch {
         self.insert_op(PatchOp::splice(offset, old_len, new_bytes))
     }
 
+    /// Length-preserving byte overwrite at `offset`. Unlike
+    /// [`Patch::splice`] / [`Patch::insert`] / [`Patch::delete`],
+    /// `write` coalesces with neighbouring length-preserving ops: a
+    /// second write that overlaps or abuts an existing write merges
+    /// into a single op rather than returning
+    /// [`BuildError::Overlap`]. This is what lets an interactive
+    /// editor re-type a byte it already patched (e.g. high then low
+    /// nibble) without the second write bouncing off the first.
+    ///
+    /// The only rejection path is overlap with an existing non-
+    /// length-preserving op (an `insert`, `delete`, or general
+    /// `splice`), since merging them changes the downstream
+    /// semantics in a way the caller has to think about.
     pub fn write(&mut self, offset: u64, new_bytes: impl Into<Vec<u8>>) -> Result<(), BuildError> {
-        self.insert_op(PatchOp::write(offset, new_bytes))
+        let bytes = new_bytes.into();
+        let end = offset + bytes.len() as u64;
+
+        // Collect every existing op that overlaps or touches
+        // [offset, end). "Touches" means endpoints align -- we
+        // merge adjacent writes into one op so a run of byte-by-
+        // byte edits stays compact.
+        let mut touch_idxs: Vec<usize> = Vec::new();
+        for (i, op) in self.ops.iter().enumerate() {
+            let op_end = op.source_end();
+            if op_end < offset || op.offset > end {
+                continue;
+            }
+            touch_idxs.push(i);
+        }
+
+        // Any touched op that isn't length-preserving blocks
+        // coalescing. Fall back to the strict insert_op path, which
+        // will either accept (if the non-LP op is only adjacent,
+        // not overlapping) or reject as overlap.
+        let all_length_preserving =
+            touch_idxs.iter().all(|&i| self.ops[i].old_len == self.ops[i].new_bytes.len() as u64);
+        if !all_length_preserving {
+            return self.insert_op(PatchOp::write(offset, bytes));
+        }
+
+        if touch_idxs.is_empty() {
+            return self.insert_op(PatchOp::write(offset, bytes));
+        }
+
+        // Compute the merged range, build a new bytes buffer, and
+        // drop the absorbed ops. Existing bytes go down first; the
+        // new write paints on top so overlapping regions pick up
+        // the fresh value.
+        let first = touch_idxs[0];
+        let last = *touch_idxs.last().unwrap();
+        let merged_start = self.ops[first].offset.min(offset);
+        let merged_end = self.ops[last].source_end().max(end);
+        let merged_len = (merged_end - merged_start) as usize;
+        let mut merged = vec![0u8; merged_len];
+        for &i in &touch_idxs {
+            let op = &self.ops[i];
+            let dst = (op.offset - merged_start) as usize;
+            merged[dst..dst + op.new_bytes.len()].copy_from_slice(&op.new_bytes);
+        }
+        let dst = (offset - merged_start) as usize;
+        merged[dst..dst + bytes.len()].copy_from_slice(&bytes);
+
+        // Drain absorbed ops in reverse so indices stay valid.
+        for &i in touch_idxs.iter().rev() {
+            self.ops.remove(i);
+        }
+        self.insert_op(PatchOp::write(merged_start, merged))
     }
 
     pub fn insert(&mut self, offset: u64, new_bytes: impl Into<Vec<u8>>) -> Result<(), BuildError> {
@@ -465,13 +530,45 @@ mod tests {
     }
 
     #[test]
-    fn overlap_is_rejected() {
+    fn write_overlap_is_coalesced() {
+        // Consecutive writes to the same byte (e.g. a hex editor
+        // typing the high then the low nibble) must compose, not
+        // reject. Regression from the original strict-overlap
+        // policy: the second press was bouncing off the first.
+        let mut p = Patch::new();
+        p.write(2, vec![0xA0]).unwrap();
+        p.write(2, vec![0xAA]).unwrap();
+        assert_eq!(p.apply(&[0u8; 4]).unwrap(), vec![0, 0, 0xAA, 0]);
+        assert_eq!(p.ops().len(), 1);
+    }
+
+    #[test]
+    fn write_overlap_partial_merges_into_one_op() {
         let mut p = Patch::new();
         p.write(2, vec![0xAA, 0xBB]).unwrap();
-        assert!(matches!(
-            p.write(3, vec![0xCC]),
-            Err(BuildError::Overlap { .. })
-        ));
+        p.write(3, vec![0xCC, 0xDD]).unwrap();
+        assert_eq!(p.apply(&[0u8; 6]).unwrap(), vec![0, 0, 0xAA, 0xCC, 0xDD, 0]);
+        assert_eq!(p.ops().len(), 1);
+    }
+
+    #[test]
+    fn write_adjacent_writes_merge() {
+        let mut p = Patch::new();
+        p.write(2, vec![0xAA]).unwrap();
+        p.write(3, vec![0xBB]).unwrap();
+        assert_eq!(p.apply(&[0u8; 5]).unwrap(), vec![0, 0, 0xAA, 0xBB, 0]);
+        assert_eq!(p.ops().len(), 1);
+    }
+
+    #[test]
+    fn write_rejects_overlap_with_nonlength_preserving_op() {
+        // delete consumes source bytes without producing any --
+        // composing a write into that range would re-surface
+        // bytes the delete was supposed to remove, so we keep the
+        // hard rejection rather than guessing the intent.
+        let mut p = Patch::new();
+        p.delete(2, 3).unwrap();
+        assert!(matches!(p.write(2, vec![0xAA]), Err(BuildError::Overlap { .. })));
     }
 
     #[test]

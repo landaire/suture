@@ -28,6 +28,7 @@
 
 mod metadata;
 mod patch;
+mod sink;
 
 pub use metadata::FileMetadata;
 pub use metadata::HashAlgorithm;
@@ -38,3 +39,6 @@ pub use patch::ApplyError;
 pub use patch::BuildError;
 pub use patch::Patch;
 pub use patch::PatchOp;
+pub use sink::ApplyToError;
+pub use sink::BufferError;
+pub use sink::PatchTarget;

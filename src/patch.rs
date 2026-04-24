@@ -6,6 +6,8 @@ use std::io;
 
 use crate::metadata::SourceMetadata;
 use crate::metadata::VerifyError;
+use crate::sink::ApplyToError;
+use crate::sink::PatchTarget;
 
 /// One splice in a [`Patch`].
 ///
@@ -204,6 +206,33 @@ impl Patch {
             out.extend_from_slice(&source[cursor as usize..]);
         }
         Ok(out)
+    }
+
+    /// Apply the patch in-place to `target`.
+    ///
+    /// Fixed-size targets (`&mut [u8]`) return an error on any
+    /// length-changing op via their
+    /// [`PatchTarget::splice_at`](crate::PatchTarget::splice_at)
+    /// impl; growable targets (`Vec<u8>`, `std::fs::File`) handle
+    /// every shape. Callers who want metadata verification should
+    /// run [`SourceMetadata::verify`](crate::SourceMetadata::verify)
+    /// on the target's bytes first -- `apply_to` has no read access
+    /// to the target and skips verification.
+    pub fn apply_to<T: PatchTarget + ?Sized>(&self, target: &mut T) -> Result<(), ApplyToError<T::Error>> {
+        let mut cursor: u64 = 0;
+        let mut delta: i64 = 0;
+        for op in &self.ops {
+            if op.offset < cursor {
+                return Err(ApplyToError::OutOfOrder { offset: op.offset, cursor });
+            }
+            let target_offset = (op.offset as i64 + delta) as u64;
+            target
+                .splice_at(target_offset, op.old_len, &op.new_bytes)
+                .map_err(ApplyToError::Sink)?;
+            cursor = op.source_end();
+            delta += op.new_bytes.len() as i64 - op.old_len as i64;
+        }
+        Ok(())
     }
 
     /// Apply the patch by streaming `source` through `sink`. Cheaper

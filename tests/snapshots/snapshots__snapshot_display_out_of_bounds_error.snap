@@ -1,0 +1,5 @@
+---
+source: tests/snapshots.rs
+expression: err.to_string()
+---
+splice [30, 34) extends past source length 16

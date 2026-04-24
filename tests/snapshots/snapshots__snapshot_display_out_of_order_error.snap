@@ -1,0 +1,5 @@
+---
+source: tests/snapshots.rs
+expression: err.to_string()
+---
+splice at 5 would re-cross cursor 11; ops must be sorted by offset

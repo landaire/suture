@@ -1,0 +1,5 @@
+---
+source: tests/snapshots.rs
+expression: err.to_string()
+---
+splice at 5 overlaps existing op at [4, 7)

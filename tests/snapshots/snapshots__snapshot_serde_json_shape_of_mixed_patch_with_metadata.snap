@@ -1,0 +1,42 @@
+---
+source: tests/snapshots.rs
+expression: json
+---
+{
+  "ops": [
+    {
+      "offset": 2,
+      "old_len": 2,
+      "new_bytes": [
+        170,
+        187
+      ]
+    },
+    {
+      "offset": 16,
+      "old_len": 0,
+      "new_bytes": [
+        204,
+        221
+      ]
+    },
+    {
+      "offset": 28,
+      "old_len": 2,
+      "new_bytes": []
+    }
+  ],
+  "metadata": {
+    "len": 32,
+    "digest": {
+      "algorithm": "Crc32",
+      "bytes": [
+        145,
+        38,
+        126,
+        138
+      ]
+    },
+    "file": null
+  }
+}

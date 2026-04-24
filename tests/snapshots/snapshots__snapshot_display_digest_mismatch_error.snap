@@ -1,0 +1,5 @@
+---
+source: tests/snapshots.rs
+expression: err.to_string()
+---
+source verification failed: source crc32 digest mismatch

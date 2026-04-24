@@ -1,0 +1,6 @@
+---
+source: tests/snapshots.rs
+expression: hexdump(&p.apply(&corpus()).unwrap())
+---
+0000: 00 01 02 03 68 69 0c 0d 0e 0f 10 11 12 13 14 15  |....hi..........|
+0010: 16 17 18 19 1a 1b 1c 1d 1e 1f                    |..........|

@@ -1,0 +1,26 @@
+[package]
+name = "suture"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+description = "In-memory binary patches: ordered length-preserving byte writes over a base buffer, with optional source-material verification."
+repository = "https://github.com/landaire/suture"
+keywords = ["patch", "binary", "diff", "edit", "overlay"]
+categories = ["data-structures", "encoding"]
+
+[dependencies]
+blake3 = { version = "1.8.4", optional = true }
+rkyv = { version = "0.8.16", default-features = false, features = ["alloc", "bytecheck"], optional = true }
+serde = { version = "1.0.228", features = ["derive"], optional = true }
+sha2 = { version = "0.11.0", optional = true }
+
+[dev-dependencies]
+serde_json = "1.0.149"
+
+[features]
+default = []
+serde = ["dep:serde"]
+rkyv = ["dep:rkyv"]
+blake3 = ["dep:blake3"]
+sha2 = ["dep:sha2"]

@@ -2,6 +2,7 @@
 //! applied to the buffer it was generated against.
 
 use core::fmt;
+use std::io;
 
 /// Description of the source bytes a [`Patch`](crate::Patch) was
 /// generated against. None of the fields are required individually:
@@ -85,6 +86,32 @@ pub struct FileMetadata {
     /// Stored split so the type stays platform- and timezone-agnostic.
     pub mtime_seconds: i64,
     pub mtime_nanos: u32,
+}
+
+impl FileMetadata {
+    /// Snapshot an open file's size and modification time.
+    ///
+    /// Convenience wrapper around [`FileMetadata::from_metadata`] for
+    /// the common "I already have the file open" case.
+    pub fn from_file(file: &std::fs::File) -> io::Result<Self> {
+        Self::from_metadata(&file.metadata()?)
+    }
+
+    /// Snapshot a [`std::fs::Metadata`] into the library's platform-
+    /// agnostic form. Errors if the filesystem didn't record an
+    /// mtime (rare, typically only on exotic filesystems) or if the
+    /// mtime predates the Unix epoch.
+    pub fn from_metadata(meta: &std::fs::Metadata) -> io::Result<Self> {
+        let mtime = meta.modified()?;
+        let duration = mtime.duration_since(std::time::UNIX_EPOCH).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("file mtime predates Unix epoch: {e}"))
+        })?;
+        Ok(Self {
+            size: meta.len(),
+            mtime_seconds: duration.as_secs() as i64,
+            mtime_nanos: duration.subsec_nanos(),
+        })
+    }
 }
 
 /// Hash function tag. CRC-32 is always available; cryptographic
@@ -207,5 +234,31 @@ mod tests {
         let meta = SourceMetadata::new(bytes.len() as u64).with_digest(SourceDigest::new(HashAlgorithm::Sha256, digest));
         assert!(meta.verify(bytes).is_ok());
         assert!(meta.verify(b"hello WORLD").is_err());
+    }
+
+    #[test]
+    fn file_metadata_from_file_captures_size_and_mtime() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(b"hello suture").unwrap();
+        tmp.as_file_mut().sync_all().unwrap();
+
+        let fm = FileMetadata::from_file(tmp.as_file()).unwrap();
+        assert_eq!(fm.size, b"hello suture".len() as u64);
+        // mtime is expected to be post-epoch on any sane host.
+        assert!(fm.mtime_seconds > 0);
+        assert!(fm.mtime_nanos < 1_000_000_000);
+    }
+
+    #[test]
+    fn file_metadata_from_metadata_matches_from_file() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(b"x").unwrap();
+        tmp.as_file_mut().sync_all().unwrap();
+
+        let via_file = FileMetadata::from_file(tmp.as_file()).unwrap();
+        let via_meta = FileMetadata::from_metadata(&tmp.as_file().metadata().unwrap()).unwrap();
+        assert_eq!(via_file, via_meta);
     }
 }

@@ -10,7 +10,6 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use suture::FileMetadata;
 use suture::HashAlgorithm;
 use suture::Patch;
 use suture::SourceDigest;
@@ -52,19 +51,6 @@ pub fn metadata_with_blake3(source: &[u8]) -> SourceMetadata {
 pub fn metadata_with_sha256(source: &[u8]) -> SourceMetadata {
     let digest = HashAlgorithm::Sha256.compute(source);
     SourceMetadata::new(source.len() as u64).with_digest(SourceDigest::new(HashAlgorithm::Sha256, digest))
-}
-
-/// Snapshot `std::fs::Metadata` into the library's platform-agnostic
-/// [`FileMetadata`].
-pub fn file_metadata_of(path: &Path) -> FileMetadata {
-    let meta = fs::metadata(path).expect("stat temp file");
-    let mtime = meta.modified().expect("modified time");
-    let duration = mtime.duration_since(std::time::UNIX_EPOCH).expect("mtime is after unix epoch");
-    FileMetadata {
-        size: meta.len(),
-        mtime_seconds: duration.as_secs() as i64,
-        mtime_nanos: duration.subsec_nanos(),
-    }
 }
 
 /// Write `bytes` to `path`, overwriting anything that's there.

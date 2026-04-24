@@ -136,9 +136,9 @@ fn file_metadata_is_not_consulted_by_verify() {
 fn file_backed_source_is_caught_after_rewrite() {
     // End-to-end: build a patch against a real temp file, rewrite
     // the file, read it back, and confirm verify() refuses it.
-    use crate::common::file_metadata_of;
     use crate::common::overwrite_file;
     use std::fs;
+    use suture::FileMetadata;
     use suture::HashAlgorithm;
     use suture::SourceDigest;
 
@@ -146,7 +146,7 @@ fn file_backed_source_is_caught_after_rewrite() {
     overwrite_file(tmp.path(), &corpus());
 
     let original = fs::read(tmp.path()).unwrap();
-    let original_stat = file_metadata_of(tmp.path());
+    let original_stat = FileMetadata::from_file(&fs::File::open(tmp.path()).unwrap()).unwrap();
     let meta = SourceMetadata::new(original.len() as u64)
         .with_digest(SourceDigest::new(HashAlgorithm::Crc32, HashAlgorithm::Crc32.compute(&original)))
         .with_file(original_stat);
@@ -162,7 +162,7 @@ fn file_backed_source_is_caught_after_rewrite() {
     overwrite_file(tmp.path(), &tampered);
 
     let reread = fs::read(tmp.path()).unwrap();
-    let new_stat = file_metadata_of(tmp.path());
+    let new_stat = FileMetadata::from_file(&fs::File::open(tmp.path()).unwrap()).unwrap();
 
     // mtime fast-path (a caller convention, not enforced by the
     // library) sees the file has changed.

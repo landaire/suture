@@ -264,7 +264,11 @@ fn apply_no_backup_skips_bak_creation() {
         "{}.bak",
         f.work.file_name().unwrap().to_str().unwrap()
     ));
-    assert!(!bak.exists(), "no-backup should not create {}", bak.display());
+    assert!(
+        !bak.exists(),
+        "no-backup should not create {}",
+        bak.display()
+    );
 }
 
 #[test]

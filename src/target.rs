@@ -128,7 +128,10 @@ impl PatchTarget for std::fs::File {
         old_len: u64,
         new_bytes: &[u8],
     ) -> Result<(), Self::Error> {
-        use io::{Read, Seek, SeekFrom, Write};
+        use io::Read;
+        use io::Seek;
+        use io::SeekFrom;
+        use io::Write;
 
         if old_len == new_bytes.len() as u64 {
             self.seek(SeekFrom::Start(offset))?;

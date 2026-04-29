@@ -84,7 +84,12 @@ pub fn run(args: ApplyArgs, io: &mut Stdio<'_>) -> Result<(), CliError> {
                 e
             )
         })?;
-        writeln!(io.err, "backed up {} -> {}", args.target.display(), bak.display())?;
+        writeln!(
+            io.err,
+            "backed up {} -> {}",
+            args.target.display(),
+            bak.display()
+        )?;
     }
 
     write_path(destination, &result)?;
@@ -140,16 +145,10 @@ fn report_verify_warning(
     )?;
     match err {
         VerifyError::LengthMismatch { expected, actual } => {
-            writeln!(
-                io.err,
-                "  source length: expected {expected}, got {actual}"
-            )?;
+            writeln!(io.err, "  source length: expected {expected}, got {actual}")?;
         }
         VerifyError::DigestMismatch { algorithm, .. } => {
-            writeln!(
-                io.err,
-                "  source {algorithm} digest does not match"
-            )?;
+            writeln!(io.err, "  source {algorithm} digest does not match")?;
         }
     }
     if meta.digest.is_some() {
@@ -168,9 +167,9 @@ fn report_verify_warning(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::DigestKind;
     use super::super::diff::build_patch;
+    use super::*;
     use std::time::Duration;
 
     /// Build a patch + write a file pair where the file's contents
@@ -180,9 +179,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = b"original bytes here".to_vec();
         let tgt = b"original BYTES here".to_vec();
-        let patch =
-            build_patch(&src, &tgt, Duration::from_secs(60), DigestKind::Blake3);
-        let bytes = format::encode(&patch, format::Compression::Never).unwrap().bytes;
+        let patch = build_patch(&src, &tgt, Duration::from_secs(60), DigestKind::Blake3);
+        let bytes = format::encode(&patch, format::Compression::Never)
+            .unwrap()
+            .bytes;
         let patch_path = dir.path().join("p.suture");
         let target_path = dir.path().join("file.bin");
         std::fs::write(&patch_path, &bytes).unwrap();

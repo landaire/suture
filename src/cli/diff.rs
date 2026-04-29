@@ -130,12 +130,7 @@ pub fn run(args: DiffArgs, io: &mut Stdio<'_>) -> Result<(), CliError> {
 /// the raw `Delete`/`Insert`/`Replace` records and rebuild the
 /// patch from the `Equal` runs only: those define what stays, and
 /// the gaps between them define what changes.
-pub fn build_patch(
-    source: &[u8],
-    target: &[u8],
-    timeout: Duration,
-    digest: DigestKind,
-) -> Patch {
+pub fn build_patch(source: &[u8], target: &[u8], timeout: Duration, digest: DigestKind) -> Patch {
     let deadline = Instant::now().checked_add(timeout);
     let raw_ops = capture_diff_slices_deadline(Algorithm::Myers, source, target, deadline);
 
@@ -217,8 +212,14 @@ mod tests {
     #[test]
     fn round_trip_via_apply_reproduces_target() {
         let source = b"hello world\nthis is line two\nthis is line three\n".to_vec();
-        let target = b"hello WORLD\nthis is line two\nbrand new line\nthis is line three\n".to_vec();
-        let patch = build_patch(&source, &target, Duration::from_secs(60), DigestKind::Blake3);
+        let target =
+            b"hello WORLD\nthis is line two\nbrand new line\nthis is line three\n".to_vec();
+        let patch = build_patch(
+            &source,
+            &target,
+            Duration::from_secs(60),
+            DigestKind::Blake3,
+        );
         let applied = patch.apply(&source).unwrap();
         assert_eq!(applied, target);
     }
@@ -227,7 +228,12 @@ mod tests {
     fn metadata_records_length_and_digest() {
         let source = b"abc".to_vec();
         let target = b"abd".to_vec();
-        let patch = build_patch(&source, &target, Duration::from_secs(60), DigestKind::Blake3);
+        let patch = build_patch(
+            &source,
+            &target,
+            Duration::from_secs(60),
+            DigestKind::Blake3,
+        );
         let meta = patch.metadata().expect("metadata recorded");
         assert_eq!(meta.len, source.len() as u64);
         let digest = meta.digest.as_ref().expect("digest recorded");

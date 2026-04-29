@@ -45,10 +45,7 @@ pub fn make_backup(orig: &Path) -> io::Result<PathBuf> {
 /// already exists (caller advances to the next slot), `Err` on any
 /// other I/O failure.
 fn try_create_and_write(path: &Path, bytes: &[u8]) -> io::Result<Option<PathBuf>> {
-    let result = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path);
+    let result = OpenOptions::new().write(true).create_new(true).open(path);
     match result {
         Ok(mut f) => {
             use io::Write;
@@ -86,7 +83,10 @@ mod tests {
         let p = Path::new("/tmp/notes.txt");
         assert_eq!(bak_path(p, None), PathBuf::from("/tmp/notes.txt.bak"));
         assert_eq!(bak_path(p, Some(1)), PathBuf::from("/tmp/notes.txt.1.bak"));
-        assert_eq!(bak_path(p, Some(42)), PathBuf::from("/tmp/notes.txt.42.bak"));
+        assert_eq!(
+            bak_path(p, Some(42)),
+            PathBuf::from("/tmp/notes.txt.42.bak")
+        );
     }
 
     #[test]
@@ -121,8 +121,17 @@ mod tests {
         assert_eq!(std::fs::read(&bak).unwrap(), b"v3");
 
         // existing slots remain untouched
-        assert_eq!(std::fs::read(dir.path().join("file.bin.bak")).unwrap(), b"v0");
-        assert_eq!(std::fs::read(dir.path().join("file.bin.1.bak")).unwrap(), b"v1");
-        assert_eq!(std::fs::read(dir.path().join("file.bin.2.bak")).unwrap(), b"v2");
+        assert_eq!(
+            std::fs::read(dir.path().join("file.bin.bak")).unwrap(),
+            b"v0"
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("file.bin.1.bak")).unwrap(),
+            b"v1"
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("file.bin.2.bak")).unwrap(),
+            b"v2"
+        );
     }
 }

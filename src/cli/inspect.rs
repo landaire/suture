@@ -25,8 +25,8 @@ pub struct InspectArgs {
 
 pub fn run(args: InspectArgs, io: &mut Stdio<'_>) -> Result<(), CliError> {
     let bytes = read_path(&args.patch)?;
-    let decoded = format::decode(&bytes)
-        .map_err(|e| format!("decode {}: {}", args.patch.display(), e))?;
+    let decoded =
+        format::decode(&bytes).map_err(|e| format!("decode {}: {}", args.patch.display(), e))?;
 
     writeln!(io.out, "format version: {}", decoded.format_version)?;
     writeln!(io.out, "compressed:     {}", decoded.compressed)?;

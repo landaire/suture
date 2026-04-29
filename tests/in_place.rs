@@ -3,8 +3,12 @@
 
 mod common;
 
-use std::fs::{self, OpenOptions};
-use std::io::{Seek, SeekFrom};
+use std::fs::OpenOptions;
+use std::fs::{
+    self,
+};
+use std::io::Seek;
+use std::io::SeekFrom;
 
 use suture::ApplyToError;
 use suture::Patch;

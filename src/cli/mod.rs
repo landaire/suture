@@ -166,12 +166,10 @@ pub type CliError = Box<dyn core::error::Error + Send + Sync + 'static>;
 /// Helper: read a path argument into a `Vec<u8>`, with an error
 /// message that names the path.
 pub(crate) fn read_path(p: &PathBuf) -> Result<Vec<u8>, CliError> {
-    std::fs::read(p)
-        .map_err(|e| format!("failed to read {}: {}", p.display(), e).into())
+    std::fs::read(p).map_err(|e| format!("failed to read {}: {}", p.display(), e).into())
 }
 
 /// Helper: write `bytes` to `path` (truncating).
 pub(crate) fn write_path(p: &PathBuf, bytes: &[u8]) -> Result<(), CliError> {
-    std::fs::write(p, bytes)
-        .map_err(|e| format!("failed to write {}: {}", p.display(), e).into())
+    std::fs::write(p, bytes).map_err(|e| format!("failed to write {}: {}", p.display(), e).into())
 }

@@ -200,8 +200,8 @@ pub fn encode(patch: &Patch, mode: Compression) -> Result<Encoded, EncodeError> 
             true,
         ),
         Compression::Auto => {
-            let zst = zstd::encode_all(archived.as_slice(), ZSTD_LEVEL)
-                .map_err(EncodeError::Compress)?;
+            let zst =
+                zstd::encode_all(archived.as_slice(), ZSTD_LEVEL).map_err(EncodeError::Compress)?;
             // Tie-break in favour of raw: smaller-or-equal compressed
             // payloads aren't worth the extra decode dependency on the
             // reader side.
@@ -267,8 +267,7 @@ pub fn decode(bytes: &[u8]) -> Result<Decoded, DecodeError> {
     // into a `Vec<u8>` which has u8 alignment, so we re-copy into
     // an `AlignedVec` before validating.
     let aligned: AlignedVec<16> = if compressed {
-        let decompressed =
-            zstd::decode_all(body_slice).map_err(DecodeError::Decompress)?;
+        let decompressed = zstd::decode_all(body_slice).map_err(DecodeError::Decompress)?;
         let mut a = AlignedVec::with_capacity(decompressed.len());
         a.extend_from_slice(&decompressed);
         a
@@ -430,7 +429,10 @@ mod tests {
 
     #[test]
     fn rejects_short_header() {
-        assert!(matches!(decode(&[1, 2, 3]), Err(DecodeError::ShortHeader { got: 3 })));
+        assert!(matches!(
+            decode(&[1, 2, 3]),
+            Err(DecodeError::ShortHeader { got: 3 })
+        ));
     }
 
     #[test]

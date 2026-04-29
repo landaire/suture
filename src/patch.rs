@@ -175,8 +175,9 @@ impl Patch {
         // coalescing. Fall back to the strict insert_op path, which
         // will either accept (if the non-LP op is only adjacent,
         // not overlapping) or reject as overlap.
-        let all_length_preserving =
-            touch_idxs.iter().all(|&i| self.ops[i].old_len == self.ops[i].new_bytes.len() as u64);
+        let all_length_preserving = touch_idxs
+            .iter()
+            .all(|&i| self.ops[i].old_len == self.ops[i].new_bytes.len() as u64);
         if !all_length_preserving {
             return self.insert_op(PatchOp::write(offset, bytes));
         }
@@ -568,7 +569,10 @@ mod tests {
         // hard rejection rather than guessing the intent.
         let mut p = Patch::new();
         p.delete(2, 3).unwrap();
-        assert!(matches!(p.write(2, vec![0xAA]), Err(BuildError::Overlap { .. })));
+        assert!(matches!(
+            p.write(2, vec![0xAA]),
+            Err(BuildError::Overlap { .. })
+        ));
     }
 
     #[test]

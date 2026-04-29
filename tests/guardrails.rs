@@ -177,7 +177,10 @@ fn overlap_between_two_writes_is_coalesced() {
     p.write(4, vec![0xAA, 0xBB, 0xCC]).unwrap();
     p.write(6, vec![0xDD]).unwrap();
     assert_eq!(p.ops().len(), 1);
-    assert_eq!(p.apply(&[0u8; 8]).unwrap(), vec![0, 0, 0, 0, 0xAA, 0xBB, 0xDD, 0]);
+    assert_eq!(
+        p.apply(&[0u8; 8]).unwrap(),
+        vec![0, 0, 0, 0, 0xAA, 0xBB, 0xDD, 0]
+    );
 }
 
 #[test]

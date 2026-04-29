@@ -23,6 +23,12 @@
 pub mod metadata;
 pub mod target;
 
+#[cfg(all(feature = "rkyv", feature = "cli"))]
+pub mod format;
+
+#[cfg(feature = "cli")]
+pub mod cli;
+
 mod patch;
 
 pub use patch::ApplyError;
